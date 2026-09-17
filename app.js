@@ -336,23 +336,16 @@ document.addEventListener('click', (e) => {
   if (e.target === importModal) toggleImportModal();
 });
 // Auto-import from URL parameter
-function checkForImportUrl() {
-  if (!supabase_module) {
-    // Supabase not loaded yet, try again in 500ms
-    setTimeout(checkForImportUrl, 500);
-    return;
+setTimeout(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const importUrl = params.get('url');
+    
+    if (importUrl) {
+      document.getElementById('importUrl').value = importUrl;
+      toggleImportModal();
+    }
+  } catch (e) {
+    console.log('Auto-import skipped');
   }
-  
-  const params = new URLSearchParams(window.location.search);
-  const importUrl = params.get('url');
-  
-  if (importUrl) {
-    document.getElementById('importUrl').value = importUrl;
-    toggleImportModal();
-  }
-}
-
-// Start checking once page is loaded
-document.addEventListener('DOMContentLoaded', checkForImportUrl);
-
-
+}, 2000);
