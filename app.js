@@ -335,9 +335,14 @@ document.addEventListener('click', (e) => {
   if (e.target === addModal) toggleAddModal();
   if (e.target === importModal) toggleImportModal();
 });
-
 // Auto-import from URL parameter
-document.addEventListener('DOMContentLoaded', () => {
+function checkForImportUrl() {
+  if (!supabase_module) {
+    // Supabase not loaded yet, try again in 500ms
+    setTimeout(checkForImportUrl, 500);
+    return;
+  }
+  
   const params = new URLSearchParams(window.location.search);
   const importUrl = params.get('url');
   
@@ -345,5 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('importUrl').value = importUrl;
     toggleImportModal();
   }
-});
+}
+
+// Start checking once page is loaded
+document.addEventListener('DOMContentLoaded', checkForImportUrl);
+
 
