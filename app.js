@@ -335,17 +335,3 @@ document.addEventListener('click', (e) => {
   if (e.target === addModal) toggleAddModal();
   if (e.target === importModal) toggleImportModal();
 });
-// Auto-import from URL parameter
-setTimeout(() => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const importUrl = params.get('url');
-    
-    if (importUrl) {
-      document.getElementById('importUrl').value = importUrl;
-      toggleImportModal();
-    }
-  } catch (e) {
-    console.log('Auto-import skipped');
-  }
-}, 2000);
