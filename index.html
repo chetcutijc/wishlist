@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wishlist</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 600;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #000;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #333;
+    }
+
+    button.secondary {
+      background: #e0e0e0;
+      color: #000;
+    }
+
+    button.secondary:hover {
+      background: #d0d0d0;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .stat-label {
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .tab {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      color: #000;
+      border-bottom-color: #000;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .items-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+    }
+
+    .item-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .item-card:hover {
+      border-color: #ccc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .item-image {
+      width: 100%;
+      height: 200px;
+      background: #f5f5f5;
+      object-fit: cover;
+    }
+
+    .item-body {
+      padding: 15px;
+    }
+
+    .item-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .item-meta {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .priority-high {
+      background: #fecaca;
+      color: #991b1b;
+    }
+
+    .priority-medium {
+      background: #fed7aa;
+      color: #92400e;
+    }
+
+    .priority-low {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-wanted {
+      background: #bfdbfe;
+      color: #1e40af;
+    }
+
+    .status-monitoring {
+      background: #fcd34d;
+      color: #78350f;
+    }
+
+    .status-purchased {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .item-price {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 10px;
+      color: #666;
+    }
+
+    .item-notes {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+
+    .item-url {
+      font-size: 12px;
+      color: #0066cc;
+      text-decoration: none;
+      display: block;
+      margin-bottom: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-url:hover {
+      text-decoration: underline;
+    }
+
+    .item-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+    }
+
+    .item-actions button {
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .delete-btn {
+      background: #fecaca !important;
+      color: #991b1b !important;
+    }
+
+    .delete-btn:hover {
+      background: #fca5a5 !important;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      padding: 20px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 8px;
+      padding: 30px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #000;
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .form-actions button {
+      flex: 1;
+    }
+
+    .import-section {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .import-input {
+      display: flex;
+      gap: 10px;
+    }
+
+    .import-input input {
+      flex: 1;
+    }
+
+    .import-input button {
+      flex: 0 0 auto;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+
+    .empty-state p {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      background: white;
+      color: #666;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: #000;
+      color: white;
+      border-color: #000;
+    }
+
+    .error {
+      background: #fecaca;
+      color: #991b1b;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+
+    .success {
+      background: #d1fae5;
+      color: #065f46;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+
+    .filter-sort {
+      display: flex;
+      gap: 10px;
+    }
+
+    select {
+      max-width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Wishlist</h1>
+      <div class="header-right">
+        <button class="secondary" onclick="toggleImportModal()">Import from URL</button>
+        <button onclick="toggleAddModal()">+ Add Item</button>
+      </div>
+    </header>
+
+    <div id="message"></div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Total Items</div>
+        <div class="stat-value" id="totalItems">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Wanted</div>
+        <div class="stat-value" id="wantedCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Monitoring</div>
+        <div class="stat-value" id="monitoringCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Purchased</div>
+        <div class="stat-value" id="purchasedCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Value</div>
+        <div class="stat-value" id="totalValue">$0</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('all')">All Items</button>
+      <button class="tab" onclick="switchTab('wanted')">Wanted</button>
+      <button class="tab" onclick="switchTab('monitoring')">Monitoring</button>
+      <button class="tab" onclick="switchTab('purchased')">Purchased</button>
+    </div>
+
+    <div class="filter-bar">
+      <div class="filter-sort">
+        <select id="sortBy" onchange="renderItems()">
+          <option value="created-desc">Newest First</option>
+          <option value="created-asc">Oldest First</option>
+          <option value="priority">Highest Priority</option>
+          <option value="price-desc">Most Expensive</option>
+          <option value="price-asc">Least Expensive</option>
+          <option value="name">Name (A-Z)</option>
+        </select>
+      </div>
+      <div class="filter-sort">
+        <select id="priorityFilter" onchange="renderItems()">
+          <option value="">All Priorities</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="allTab" class="tab-content active">
+      <div id="itemsContainer" class="items-grid"></div>
+      <div id="emptyAll" class="empty-state">
+        <p>No items yet. Add one to get started!</p>
+      </div>
+    </div>
+
+    <div id="wantedTab" class="tab-content"></div>
+    <div id="monitoringTab" class="tab-content"></div>
+    <div id="purchasedTab" class="tab-content"></div>
+
+    <div id="loadingIndicator" class="loading">
+      <p>Loading...</p>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div id="addModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add Item</h2>
+        <button class="modal-close" onclick="toggleAddModal()">×</button>
+      </div>
+      <div id="formMessage"></div>
+      <form id="itemForm" onsubmit="saveItem(event)">
+        <div class="form-group">
+          <label for="itemName">Name *</label>
+          <input type="text" id="itemName" required>
+        </div>
+        <div class="form-group">
+          <label for="itemUrl">URL</label>
+          <input type="url" id="itemUrl" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label for="itemPrice">Price</label>
+          <input type="number" id="itemPrice" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label for="itemPriority">Priority</label>
+          <select id="itemPriority">
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="itemStatus">Status</label>
+          <select id="itemStatus">
+            <option value="Wanted">Wanted</option>
+            <option value="Monitoring">Monitoring</option>
+            <option value="Purchased">Purchased</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="itemNotes">Notes</label>
+          <textarea id="itemNotes" placeholder="Size, color, specific features..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="secondary" onclick="toggleAddModal()">Cancel</button>
+          <button type="submit">Save Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="importModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Import from URL</h2>
+        <button class="modal-close" onclick="toggleImportModal()">×</button>
+      </div>
+      <div id="importMessage"></div>
+      <div class="form-group">
+        <label for="importUrl">Product URL</label>
+        <input type="url" id="importUrl" placeholder="https://example.com/product" required>
+      </div>
+      <div class="form-group">
+        <label for="importPriority">Priority</label>
+        <select id="importPriority">
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="importNotes">Notes (Optional)</label>
+        <textarea id="importNotes"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="secondary" onclick="toggleImportModal()">Cancel</button>
+        <button type="button" id="importBtn" onclick="importFromUrl()">Import & Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
