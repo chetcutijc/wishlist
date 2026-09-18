@@ -340,16 +340,10 @@ document.addEventListener('click', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     const params = new URLSearchParams(window.location.search);
-    const importUrl = params.get('url');
-    
-    if (importUrl) {
-      // Pre-fill the URL field
-      const urlField = document.getElementById('importUrl');
-      if (urlField) {
-        urlField.value = decodeURIComponent(importUrl);
-      }
-      // Open modal
-      toggleImportModal();
+    if (params.get('url')) {
+      document.getElementById('importUrl').value = decodeURIComponent(params.get('url'));
+      document.getElementById('importModal').classList.add('active');
     }
   }, 1000);
 });
+
