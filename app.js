@@ -335,3 +335,14 @@ document.addEventListener('click', (e) => {
   if (e.target === addModal) toggleAddModal();
   if (e.target === importModal) toggleImportModal();
 });
+
+// Auto-open import modal if URL parameter present
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('url')) {
+      toggleImportModal();
+    }
+  }, 500);
+});
+
