@@ -1,19 +1,50 @@
 let items = [];
 let currentTab = 'all';
 let editingItemId = null;
+let db = null;                 // Supabase client, created once the library loads
+let pendingImageUrl = null;    // thumbnail captured during a URL import
 
-// Load Supabase client from CDN
-const script = document.createElement('script');
-script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-script.onload = () => {
-  supabase_module = window.supabase;
-  loadItems();
-};
-document.head.appendChild(script);
-
-async function loadItems() {
+// ---------------------------------------------------------------
+// Startup: load the Supabase library, THEN create the client.
+// ---------------------------------------------------------------
+const sbScript = document.createElement('script');
+sbScript.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+sbScript.onload = () => {
   try {
-    const { data, error } = await supabase
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    showMessage('Could not connect to the database: ' + e.message, 'error');
+    return;
+  }
+  loadItems();
+  handleSharedUrl();
+};
+sbScript.onerror = () => showMessage('Could not load the Supabase library.', 'error');
+document.head.appendChild(sbScript);
+
+// ---------------------------------------------------------------
+// Shortcut support: ?url=... pre-fills and runs the import
+// ---------------------------------------------------------------
+function handleSharedUrl() {
+  const shared = new URLSearchParams(window.location.search).get('url');
+  if (!shared) return;
+
+  document.getElementById('importUrl').value = shared;
+  document.getElementById('importModal').classList.add('active');
+
+  // Clean the address bar so a refresh doesn't re-import
+  history.replaceState({}, '', window.location.pathname);
+
+  importFromUrl();
+}
+
+// ---------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------
+async function loadItems() {
+  if (!db) return;
+  try {
+    const { data, error } = await db
       .from('wishlist_items')
       .select('*')
       .order('created_at', { ascending: false });
@@ -29,13 +60,18 @@ async function loadItems() {
 
 async function saveItem(event) {
   event.preventDefault();
-  
+
   const formMessage = document.getElementById('formMessage');
   formMessage.innerHTML = '';
 
+  if (!db) {
+    formMessage.innerHTML = '<div class="error">Database not ready yet — try again in a moment.</div>';
+    return;
+  }
+
   const name = document.getElementById('itemName').value.trim();
   const url = document.getElementById('itemUrl').value.trim();
-  const price = parseFloat(document.getElementById('itemPrice').value) || null;
+  const price = parseFloat(document.getElementById('itemPrice').value);
   const priority = document.getElementById('itemPriority').value;
   const status = document.getElementById('itemStatus').value;
   const notes = document.getElementById('itemNotes').value.trim();
@@ -45,26 +81,31 @@ async function saveItem(event) {
     return;
   }
 
+  const row = {
+    name,
+    url: url || null,
+    price: Number.isFinite(price) ? price : null,
+    priority,
+    status,
+    notes: notes || null
+  };
+
   try {
     if (editingItemId) {
-      // Update existing item
-      const { error } = await supabase
+      const { error } = await db
         .from('wishlist_items')
-        .update({ name, url, price, priority, status, notes })
+        .update(row)
         .eq('id', editingItemId);
-
       if (error) throw error;
-      showMessage('Item updated successfully', 'success');
+      showMessage('Item updated', 'success');
     } else {
-      // Create new item
-      const { error } = await supabase
-        .from('wishlist_items')
-        .insert([{ name, url, price, priority, status, notes }]);
-
+      row.source_image_url = pendingImageUrl || null;
+      const { error } = await db.from('wishlist_items').insert([row]);
       if (error) throw error;
-      showMessage('Item added successfully', 'success');
+      showMessage('Item added', 'success');
     }
 
+    pendingImageUrl = null;
     toggleAddModal();
     loadItems();
   } catch (error) {
@@ -74,13 +115,8 @@ async function saveItem(event) {
 
 async function deleteItem(id) {
   if (!confirm('Delete this item?')) return;
-
   try {
-    const { error } = await supabase
-      .from('wishlist_items')
-      .delete()
-      .eq('id', id);
-
+    const { error } = await db.from('wishlist_items').delete().eq('id', id);
     if (error) throw error;
     showMessage('Item deleted', 'success');
     loadItems();
@@ -89,57 +125,12 @@ async function deleteItem(id) {
   }
 }
 
-async function importFromUrl() {
-  const importUrl = document.getElementById('importUrl').value.trim();
-  const importMessage = document.getElementById('importMessage');
-  importMessage.innerHTML = '';
-
-  if (!importUrl) {
-    importMessage.innerHTML = '<div class="error">URL is required</div>';
-    return;
-  }
-
-  const importBtn = document.getElementById('importBtn');
-  importBtn.disabled = true;
-  importBtn.textContent = 'Importing...';
-
-  try {
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: importUrl })
-    });
-
-    if (!response.ok) throw new Error('Failed to fetch product metadata');
-
-    const data = await response.json();
-    
-    // Populate the form with imported data
-    document.getElementById('itemName').value = data.name || '';
-    document.getElementById('itemUrl').value = importUrl;
-    document.getElementById('itemPrice').value = data.price || '';
-    
-    // Switch to add modal with pre-filled data
-    toggleImportModal();
-    toggleAddModal();
-
-    // Show success message
-    showMessage('Product metadata imported. Complete the details and save.', 'success');
-  } catch (error) {
-    importMessage.innerHTML = '<div class="error">' + error.message + '</div>';
-  } finally {
-    importBtn.disabled = false;
-    importBtn.textContent = 'Import & Save';
-  }
-}
-
 async function updateItemStatus(id, newStatus) {
   try {
-    const { error } = await supabase
+    const { error } = await db
       .from('wishlist_items')
       .update({ status: newStatus })
       .eq('id', id);
-
     if (error) throw error;
     loadItems();
   } catch (error) {
@@ -147,11 +138,73 @@ async function updateItemStatus(id, newStatus) {
   }
 }
 
+// ---------------------------------------------------------------
+// URL import
+// ---------------------------------------------------------------
+async function importFromUrl() {
+  const importUrl = document.getElementById('importUrl').value.trim();
+  const importMessage = document.getElementById('importMessage');
+  const importBtn = document.getElementById('importBtn');
+  importMessage.innerHTML = '';
+
+  if (!importUrl) {
+    importMessage.innerHTML = '<div class="error">URL is required</div>';
+    return;
+  }
+
+  importBtn.disabled = true;
+  importBtn.textContent = 'Importing...';
+
+  let data = null;
+  try {
+    const response = await fetch(EDGE_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: importUrl })
+    });
+    data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Could not read that page');
+  } catch (error) {
+    importMessage.innerHTML = '<div class="error">' + error.message + '</div>';
+    importBtn.disabled = false;
+    importBtn.textContent = 'Import & Save';
+    return;
+  }
+
+  // Carry the import modal's choices across to the add form
+  const priority = document.getElementById('importPriority').value;
+  const notes = document.getElementById('importNotes').value.trim();
+
+  pendingImageUrl = data.image || null;
+
+  toggleImportModal();
+  toggleAddModal();
+
+  document.getElementById('itemName').value = data.title || '';
+  document.getElementById('itemUrl').value = data.source_url || importUrl;
+  document.getElementById('itemPrice').value = data.price || '';
+  document.getElementById('itemPriority').value = priority;
+  document.getElementById('itemStatus').value = 'Wanted';
+  document.getElementById('itemNotes').value = notes;
+
+  if (data.warning || !data.metadata_found) {
+    document.getElementById('formMessage').innerHTML =
+      '<div class="error">' + (data.warning || 'No product details found — fill them in below.') + '</div>';
+  }
+
+  importBtn.disabled = false;
+  importBtn.textContent = 'Import & Save';
+}
+
+// ---------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------
 function editItem(id) {
   const item = items.find(i => i.id === id);
   if (!item) return;
 
   editingItemId = id;
+  pendingImageUrl = null;
   document.getElementById('modalTitle').textContent = 'Edit Item';
   document.getElementById('itemName').value = item.name;
   document.getElementById('itemUrl').value = item.url || '';
@@ -161,44 +214,42 @@ function editItem(id) {
   document.getElementById('itemNotes').value = item.notes || '';
   document.getElementById('formMessage').innerHTML = '';
 
-  toggleAddModal();
+  document.getElementById('addModal').classList.add('active');
 }
 
 function renderItems() {
   const sortBy = document.getElementById('sortBy').value;
   const priorityFilter = document.getElementById('priorityFilter').value;
-  
+
   let filtered = [...items];
 
-  // Apply priority filter
   if (priorityFilter) {
     filtered = filtered.filter(item => item.priority === priorityFilter);
   }
 
-  // Apply tab filter
   if (currentTab !== 'all') {
-    filtered = filtered.filter(item => item.status === currentTab.charAt(0).toUpperCase() + currentTab.slice(1));
+    const want = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
+    filtered = filtered.filter(item => item.status === want);
   }
 
-  // Apply sorting
+  const priorityOrder = { High: 0, Medium: 1, Low: 2 };
   switch (sortBy) {
     case 'created-asc':
       filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       break;
     case 'priority':
-      const priorityOrder = { 'High': 0, 'Medium': 1, 'Low': 2 };
       filtered.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
       break;
     case 'price-desc':
-      filtered.sort((a, b) => (b.price || 0) - (a.price || 0));
+      filtered.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
       break;
     case 'price-asc':
-      filtered.sort((a, b) => (a.price || 0) - (b.price || 0));
+      filtered.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
       break;
     case 'name':
       filtered.sort((a, b) => a.name.localeCompare(b.name));
       break;
-    default: // created-desc
+    default:
       filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 
@@ -212,26 +263,32 @@ function renderItems() {
   }
 
   emptyState.style.display = 'none';
-  container.innerHTML = filtered.map(item => createItemCard(item)).join('');
+  container.innerHTML = filtered.map(createItemCard).join('');
+}
+
+function hostnameOf(url) {
+  try { return new URL(url).hostname; } catch { return url; }
 }
 
 function createItemCard(item) {
-  const priorityClass = `priority-${item.priority.toLowerCase()}`;
-  const statusClass = `status-${item.status.toLowerCase()}`;
-  const imageHtml = item.source_image_url 
-    ? `<img src="${item.source_image_url}" alt="${item.name}" class="item-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23f5f5f5%22 width=%22100%22 height=%22100%22/%3E%3C/svg%3E'">`
+  const priorityClass = 'priority-' + String(item.priority).toLowerCase();
+  const statusClass = 'status-' + String(item.status).toLowerCase();
+
+  const imageHtml = item.source_image_url
+    ? '<img src="' + item.source_image_url + '" alt="" class="item-image" onerror="this.style.display=\'none\'">'
     : '';
 
-  const urlHtml = item.url 
-    ? `<a href="${item.url}" target="_blank" class="item-url">${new URL(item.url).hostname}</a>`
+  const urlHtml = item.url
+    ? '<a href="' + item.url + '" target="_blank" class="item-url">' + escapeHtml(hostnameOf(item.url)) + '</a>'
     : '';
 
-  const priceHtml = item.price 
-    ? `<div class="item-price">$${item.price.toFixed(2)}</div>`
+  const priceValue = Number(item.price);
+  const priceHtml = Number.isFinite(priceValue) && item.price !== null
+    ? '<div class="item-price">€' + priceValue.toFixed(2) + '</div>'
     : '';
 
-  const notesHtml = item.notes 
-    ? `<div class="item-notes">${item.notes}</div>`
+  const notesHtml = item.notes
+    ? '<div class="item-notes">' + escapeHtml(item.notes) + '</div>'
     : '';
 
   return `
@@ -258,36 +315,33 @@ function createItemCard(item) {
   `;
 }
 
-function getNextStatus(currentStatus) {
-  const statusFlow = { 'Wanted': 'Monitoring', 'Monitoring': 'Purchased', 'Purchased': 'Wanted' };
-  return statusFlow[currentStatus] || 'Wanted';
+function getNextStatus(status) {
+  return { Wanted: 'Monitoring', Monitoring: 'Purchased', Purchased: 'Wanted' }[status] || 'Wanted';
 }
 
 function getStatusButtonText(status) {
-  const texts = { 'Wanted': 'Mark Monitoring', 'Monitoring': 'Mark Purchased', 'Purchased': 'Mark Wanted' };
-  return texts[status] || 'Update';
+  return { Wanted: 'Mark Monitoring', Monitoring: 'Mark Purchased', Purchased: 'Mark Wanted' }[status] || 'Update';
 }
 
 function updateStats() {
-  const total = items.length;
-  const wanted = items.filter(i => i.status === 'Wanted').length;
-  const monitoring = items.filter(i => i.status === 'Monitoring').length;
-  const purchased = items.filter(i => i.status === 'Purchased').length;
-  const totalValue = items.reduce((sum, item) => sum + (item.price || 0), 0);
-
-  document.getElementById('totalItems').textContent = total;
-  document.getElementById('wantedCount').textContent = wanted;
-  document.getElementById('monitoringCount').textContent = monitoring;
-  document.getElementById('purchasedCount').textContent = purchased;
-  document.getElementById('totalValue').textContent = '$' + totalValue.toFixed(2);
+  const totalValue = items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+  document.getElementById('totalItems').textContent = items.length;
+  document.getElementById('wantedCount').textContent = items.filter(i => i.status === 'Wanted').length;
+  document.getElementById('monitoringCount').textContent = items.filter(i => i.status === 'Monitoring').length;
+  document.getElementById('purchasedCount').textContent = items.filter(i => i.status === 'Purchased').length;
+  document.getElementById('totalValue').textContent = '€' + totalValue.toFixed(2);
 }
 
+// ---------------------------------------------------------------
+// UI
+// ---------------------------------------------------------------
 function switchTab(tab) {
   currentTab = tab;
-  
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
-  
+  const order = ['all', 'wanted', 'monitoring', 'purchased'];
+  const buttons = document.querySelectorAll('.tab');
+  buttons.forEach(b => b.classList.remove('active'));
+  const index = order.indexOf(tab);
+  if (buttons[index]) buttons[index].classList.add('active');
   renderItems();
 }
 
@@ -296,8 +350,8 @@ function toggleAddModal() {
   modal.classList.toggle('active');
 
   if (!modal.classList.contains('active')) {
-    // Reset form when closing
     editingItemId = null;
+    pendingImageUrl = null;
     document.getElementById('modalTitle').textContent = 'Add Item';
     document.getElementById('itemForm').reset();
     document.getElementById('formMessage').innerHTML = '';
@@ -308,15 +362,6 @@ function toggleImportModal() {
   const modal = document.getElementById('importModal');
   modal.classList.toggle('active');
 
-  // Auto-fill URL if coming from shortcut
-  if (modal.classList.contains('active')) {
-    const params = new URLSearchParams(window.location.search);
-    const url = params.get('url');
-    if (url) {
-      document.getElementById('importUrl').value = decodeURIComponent(url);
-    }
-  }
-
   if (!modal.classList.contains('active')) {
     document.getElementById('importUrl').value = '';
     document.getElementById('importNotes').value = '';
@@ -326,21 +371,18 @@ function toggleImportModal() {
 
 function showMessage(text, type) {
   const messageDiv = document.getElementById('message');
-  messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
-  setTimeout(() => { messageDiv.innerHTML = ''; }, 4000);
+  if (!messageDiv) return;
+  messageDiv.innerHTML = '<div class="' + type + '">' + text + '</div>';
+  setTimeout(() => { messageDiv.innerHTML = ''; }, 5000);
 }
 
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text == null ? '' : text;
   return div.innerHTML;
 }
 
-// Close modals on background click
 document.addEventListener('click', (e) => {
-  const addModal = document.getElementById('addModal');
-  const importModal = document.getElementById('importModal');
-
-  if (e.target === addModal) toggleAddModal();
-  if (e.target === importModal) toggleImportModal();
+  if (e.target === document.getElementById('addModal')) toggleAddModal();
+  if (e.target === document.getElementById('importModal')) toggleImportModal();
 });
