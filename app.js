@@ -336,13 +336,20 @@ document.addEventListener('click', (e) => {
   if (e.target === importModal) toggleImportModal();
 });
 
-// Auto-open import modal if URL parameter present
+// Auto-open import modal with URL from shortcut
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('url')) {
+    const importUrl = params.get('url');
+    
+    if (importUrl) {
+      // Pre-fill the URL field
+      const urlField = document.getElementById('importUrl');
+      if (urlField) {
+        urlField.value = decodeURIComponent(importUrl);
+      }
+      // Open modal
       toggleImportModal();
     }
-  }, 500);
+  }, 1000);
 });
-
