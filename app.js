@@ -308,6 +308,15 @@ function toggleImportModal() {
   const modal = document.getElementById('importModal');
   modal.classList.toggle('active');
 
+  // Auto-fill URL if coming from shortcut
+  if (modal.classList.contains('active')) {
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get('url');
+    if (url) {
+      document.getElementById('importUrl').value = decodeURIComponent(url);
+    }
+  }
+
   if (!modal.classList.contains('active')) {
     document.getElementById('importUrl').value = '';
     document.getElementById('importNotes').value = '';
@@ -335,15 +344,3 @@ document.addEventListener('click', (e) => {
   if (e.target === addModal) toggleAddModal();
   if (e.target === importModal) toggleImportModal();
 });
-
-// Auto-open import modal with URL from shortcut
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('url')) {
-      document.getElementById('importUrl').value = decodeURIComponent(params.get('url'));
-      document.getElementById('importModal').classList.add('active');
-    }
-  }, 1000);
-});
-
