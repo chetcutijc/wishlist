@@ -90,6 +90,26 @@
       font-weight: 600;
     }
 
+    .stat-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #b45309;
+    }
+
+    .price-missing {
+      display: inline-block;
+      margin: 6px 0;
+      padding: 4px 10px;
+      border: 1px dashed #d97706;
+      border-radius: 6px;
+      background: #fffbeb;
+      color: #b45309;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      width: auto;
+    }
+
     .tabs {
       display: flex;
       gap: 10px;
@@ -470,8 +490,14 @@
         <div class="stat-value" id="purchasedCount">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Total Value</div>
-        <div class="stat-value" id="totalValue">$0</div>
+        <div class="stat-label">Wishlist Value</div>
+        <div class="stat-value" id="wishlistValue">€0.00</div>
+        <div class="stat-sub" id="wishlistValueNote"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Purchased Value</div>
+        <div class="stat-value" id="purchasedValue">€0.00</div>
+        <div class="stat-sub" id="purchasedValueNote"></div>
       </div>
     </div>
 

@@ -189,8 +189,10 @@ async function importFromUrl() {
 
   if (data.warning || !data.metadata_found) {
     document.getElementById('formMessage').innerHTML =
-      '<div class="error">' + (data.warning || 'No product details found — fill them in below.') + '</div>';
+      '<div class="error">' + escapeHtml(data.warning || 'No product details found — fill them in below.') + '</div>';
   }
+  // Price missing (common on Amazon): put the cursor straight in the price box
+  if (!data.price) document.getElementById('itemPrice').focus();
 
   importBtn.disabled = false;
   importBtn.textContent = 'Import & Save';
@@ -199,7 +201,7 @@ async function importFromUrl() {
 // ---------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------
-function editItem(id) {
+function editItem(id, focusPrice = false) {
   const item = items.find(i => i.id === id);
   if (!item) return;
 
@@ -215,6 +217,7 @@ function editItem(id) {
   document.getElementById('formMessage').innerHTML = '';
 
   document.getElementById('addModal').classList.add('active');
+  if (focusPrice) document.getElementById('itemPrice').focus();
 }
 
 function renderItems() {
@@ -282,10 +285,9 @@ function createItemCard(item) {
     ? '<a href="' + item.url + '" target="_blank" class="item-url">' + escapeHtml(hostnameOf(item.url)) + '</a>'
     : '';
 
-  const priceValue = Number(item.price);
-  const priceHtml = Number.isFinite(priceValue) && item.price !== null
-    ? '<div class="item-price">€' + priceValue.toFixed(2) + '</div>'
-    : '';
+  const priceHtml = hasPrice(item)
+    ? '<div class="item-price">€' + Number(item.price).toFixed(2) + '</div>'
+    : '<button type="button" class="price-missing" onclick="editItem(\'' + item.id + '\', true)">+ Add price</button>';
 
   const notesHtml = item.notes
     ? '<div class="item-notes">' + escapeHtml(item.notes) + '</div>'
@@ -323,13 +325,28 @@ function getStatusButtonText(status) {
   return { Wanted: 'Mark Monitoring', Monitoring: 'Mark Purchased', Purchased: 'Mark Wanted' }[status] || 'Update';
 }
 
+function hasPrice(item) {
+  return item.price !== null && item.price !== '' && Number.isFinite(Number(item.price));
+}
+
 function updateStats() {
-  const totalValue = items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+  // Wishlist = everything not yet bought (Wanted + Monitoring)
+  const wishlist = items.filter(i => i.status !== 'Purchased');
+  const purchased = items.filter(i => i.status === 'Purchased');
+  const sum = list => list.reduce((total, item) => total + (hasPrice(item) ? Number(item.price) : 0), 0);
+  const missingNote = list => {
+    const missing = list.filter(item => !hasPrice(item)).length;
+    return missing ? missing + ' of ' + list.length + ' without a price' : '';
+  };
+
   document.getElementById('totalItems').textContent = items.length;
   document.getElementById('wantedCount').textContent = items.filter(i => i.status === 'Wanted').length;
   document.getElementById('monitoringCount').textContent = items.filter(i => i.status === 'Monitoring').length;
-  document.getElementById('purchasedCount').textContent = items.filter(i => i.status === 'Purchased').length;
-  document.getElementById('totalValue').textContent = '€' + totalValue.toFixed(2);
+  document.getElementById('purchasedCount').textContent = purchased.length;
+  document.getElementById('wishlistValue').textContent = '€' + sum(wishlist).toFixed(2);
+  document.getElementById('purchasedValue').textContent = '€' + sum(purchased).toFixed(2);
+  document.getElementById('wishlistValueNote').textContent = missingNote(wishlist);
+  document.getElementById('purchasedValueNote').textContent = missingNote(purchased);
 }
 
 // ---------------------------------------------------------------
