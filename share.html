@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- The link's code is in the address bar: never leak it to shops via Referer, never index it -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Wishlist</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      padding: 24px 16px 48px;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    header { margin-bottom: 20px; }
+    h1 { font-size: 28px; font-weight: 600; }
+    .sub { color: #666; font-size: 14px; margin-top: 4px; }
+    .grid { display: grid; gap: 12px; }
+    .card {
+      display: flex; gap: 14px; align-items: center;
+      background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
+      padding: 12px; color: inherit; text-decoration: none;
+    }
+    a.card:hover { border-color: #999; }
+    .thumb {
+      width: 72px; height: 72px; flex-shrink: 0; border-radius: 8px;
+      object-fit: contain; background: #fafafa;
+    }
+    .thumb.blank { background: #eee; }
+    .body { flex: 1; min-width: 0; }
+    .name {
+      font-weight: 600; font-size: 15px; line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .meta { margin-top: 6px; display: flex; gap: 10px; align-items: center; font-size: 13px; color: #666; }
+    .price { font-weight: 600; font-size: 16px; color: #111; }
+    .shop { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .state { text-align: center; color: #666; padding: 48px 12px; background: #fff; border-radius: 10px; border: 1px solid #e5e5e5; }
+    footer { margin-top: 24px; text-align: center; color: #999; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 id="title">Wishlist</h1>
+      <p class="sub" id="sub">Loading…</p>
+    </header>
+    <div class="grid" id="list"></div>
+    <footer>View only</footer>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    const token = new URLSearchParams(location.search).get('t') || '';
+    const list = document.getElementById('list');
+    const sub = document.getElementById('sub');
+
+    function esc(v) {
+      const d = document.createElement('div');
+      d.textContent = v == null ? '' : String(v);
+      return d.innerHTML;
+    }
+    function safeUrl(u) {
+      try { const x = new URL(u); return (x.protocol === 'https:' || x.protocol === 'http:') ? x.href : null; } catch { return null; }
+    }
+    function host(u) {
+      try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; }
+    }
+    function showState(text) {
+      sub.textContent = '';
+      list.innerHTML = '<div class="state">' + esc(text) + '</div>';
+    }
+
+    async function load() {
+      if (!/^[0-9a-f]{20,}$/.test(token)) { showState('This link isn\'t valid. Ask for a new one.'); return; }
+      try {
+        // The only thing this page can reach is one database function: it returns
+        // unbought, priced items under this link's limit, and nothing else.
+        const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/get_shared_wishlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
+          body: JSON.stringify({ p_token: token })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const rows = await res.json();
+        if (!rows.length) {
+          showState('Nothing to show right now: this link may have been removed, or there are no items on it yet.');
+          return;
+        }
+        document.title = 'Wishlist for ' + rows[0].label;
+        sub.textContent = rows.length + ' idea' + (rows.length === 1 ? '' : 's') + ', cheapest first';
+        list.innerHTML = rows.map(item => {
+          const url = safeUrl(item.url);
+          const img = safeUrl(item.source_image_url);
+          const inner = `
+            ${img ? `<img class="thumb" src="${esc(img)}" alt="" referrerpolicy="no-referrer" onerror="this.className='thumb blank';this.removeAttribute('src')">` : '<div class="thumb blank"></div>'}
+            <div class="body">
+              <div class="name">${esc(item.name)}</div>
+              <div class="meta">
+                <span class="price">€${Number(item.price).toFixed(2)}</span>
+                ${url ? `<span class="shop">${esc(host(url))}</span>` : ''}
+              </div>
+            </div>`;
+          return url
+            ? `<a class="card" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+            : `<div class="card">${inner}</div>`;
+        }).join('');
+      } catch (e) {
+        showState('Couldn\'t load the list. Try again in a moment.');
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

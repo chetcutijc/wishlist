@@ -458,15 +458,68 @@
     select {
       max-width: 200px;
     }
+
+    header { flex-wrap: wrap; gap: 12px; }
+    .header-right { flex-wrap: wrap; }
+    .header-right button { white-space: nowrap; }
+
+    /* ---- Sign-in screen ---- */
+    .auth {
+      max-width: 360px;
+      margin: 12vh auto 0;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .auth h1 { font-size: 26px; margin-bottom: 4px; }
+    .auth p { color: #666; font-size: 14px; margin-bottom: 20px; }
+    .auth input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+    .auth button { width: 100%; padding: 11px; margin-top: 4px; }
+    .auth .link-btn { background: none; color: #555; text-decoration: underline; font-weight: 400; margin-top: 10px; }
+    .auth .link-btn:hover { background: none; color: #000; }
+    .auth-err { color: #b91c1c; font-size: 13px; min-height: 18px; margin-top: 10px; }
+    [hidden] { display: none !important; }
+
+    /* ---- Share links ---- */
+    .share-intro { color: #555; font-size: 14px; margin-bottom: 16px; line-height: 1.45; }
+    .share-list { list-style: none; margin-bottom: 20px; }
+    .share-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 0; border-bottom: 1px solid #eee;
+    }
+    .share-row .who { flex: 1; min-width: 0; }
+    .share-row .who strong { display: block; }
+    .share-row .who span { color: #777; font-size: 12px; }
+    .share-row button { padding: 6px 10px; font-size: 13px; }
+    .share-empty { color: #888; font-size: 14px; padding: 8px 0 16px; }
+    .share-new { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .share-new .form-group { margin: 0; }
+    .share-new .grow { flex: 1; min-width: 150px; }
+    .share-new input { width: 100%; }
+    .share-new .price { width: 110px; }
   </style>
 </head>
 <body>
-  <div class="container">
+  <!-- Sign-in screen (shown until you're logged in) -->
+  <div id="authScreen" class="auth" hidden>
+    <h1>Wishlist</h1>
+    <p>Sign in with the same account you use for your other dashboards.</p>
+    <input type="email" id="authEmail" placeholder="Email" autocomplete="username">
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+    <button type="button" id="authSignIn">Sign in</button>
+    <button type="button" class="link-btn" id="authForgot">Forgot password?</button>
+    <div class="auth-err" id="authErr"></div>
+  </div>
+
+  <div class="container" id="app" hidden>
     <header>
       <h1>Wishlist</h1>
       <div class="header-right">
+        <button class="secondary" onclick="toggleShareModal()">Share</button>
         <button class="secondary" onclick="toggleImportModal()">Import from URL</button>
         <button onclick="toggleAddModal()">+ Add Item</button>
+        <button class="secondary" onclick="signOut()" title="Sign out">Sign out</button>
       </div>
     </header>
 
@@ -621,6 +674,30 @@
       <div class="form-actions">
         <button type="button" class="secondary" onclick="toggleImportModal()">Cancel</button>
         <button type="button" id="importBtn" onclick="importFromUrl()">Import & Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Modal -->
+  <div id="shareModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Share links</h2>
+        <button class="modal-close" onclick="toggleShareModal()">×</button>
+      </div>
+      <p class="share-intro">Each person gets their own view-only link. It shows only items you haven't bought that have a price at or under the limit. Delete a link to stop it working.</p>
+      <div id="shareMessage"></div>
+      <ul class="share-list" id="shareList"></ul>
+      <div class="share-new">
+        <div class="form-group grow">
+          <label for="shareLabel">Who is it for?</label>
+          <input type="text" id="shareLabel" placeholder="e.g. Mum">
+        </div>
+        <div class="form-group">
+          <label for="shareMax">Max price (€)</label>
+          <input type="number" id="shareMax" class="price" min="1" step="1" value="100">
+        </div>
+        <button type="button" id="shareCreateBtn" onclick="createShare()">Create link</button>
       </div>
     </div>
   </div>

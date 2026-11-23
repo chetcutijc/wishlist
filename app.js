@@ -16,11 +16,161 @@ sbScript.onload = () => {
     showMessage('Could not connect to the database: ' + e.message, 'error');
     return;
   }
-  loadItems();
-  handleSharedUrl();
+  startAuth();
 };
 sbScript.onerror = () => showMessage('Could not load the Supabase library.', 'error');
 document.head.appendChild(sbScript);
+
+// ---------------------------------------------------------------
+// Sign-in. The database only answers to your account, so nothing
+// loads until you're logged in. The session is remembered per device.
+// ---------------------------------------------------------------
+let currentUserId = null;
+const APP_URL = window.location.origin + window.location.pathname;
+
+async function startAuth() {
+  const { data: { session } } = await db.auth.getSession();
+  setUser(session ? session.user : null);
+  db.auth.onAuthStateChange((event, s) => {
+    setUser(s ? s.user : null);
+    if (event === 'PASSWORD_RECOVERY') setTimeout(setNewPassword, 300);
+  });
+
+  document.getElementById('authSignIn').onclick = signIn;
+  document.getElementById('authPassword').onkeydown = (e) => { if (e.key === 'Enter') signIn(); };
+  document.getElementById('authForgot').onclick = async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const err = document.getElementById('authErr');
+    if (!email) { err.textContent = 'Enter your email above first.'; return; }
+    const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: APP_URL });
+    err.textContent = error ? error.message : 'Check your email for a reset link. Open it on this device.';
+  };
+}
+
+function setUser(user) {
+  const newId = user ? user.id : null;
+  const changed = newId !== currentUserId;
+  currentUserId = newId;
+  document.getElementById('authScreen').hidden = !!user;
+  document.getElementById('app').hidden = !user;
+  if (user && changed) {
+    loadItems();
+    handleSharedUrl();   // the Shortcut's ?url= waits here until you've signed in
+  }
+  if (!user) items = [];
+}
+
+async function signIn() {
+  const err = document.getElementById('authErr');
+  err.textContent = '';
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  if (!email || !password) { err.textContent = 'Enter your email and password.'; return; }
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if (error) err.textContent = error.message;
+}
+
+async function signOut() {
+  await db.auth.signOut();
+}
+
+async function setNewPassword() {
+  for (;;) {
+    const pw = prompt('Choose a new password (at least 8 characters):');
+    if (pw == null) return;
+    if (pw.length < 8) { alert('At least 8 characters, please.'); continue; }
+    const { error } = await db.auth.updateUser({ password: pw });
+    if (error) { alert("Couldn't update: " + error.message); continue; }
+    showMessage('Password updated', 'success');
+    return;
+  }
+}
+
+// ---------------------------------------------------------------
+// View-only share links
+// ---------------------------------------------------------------
+const SHARE_PAGE = APP_URL.replace(/index\.html$/, '').replace(/\/?$/, '/') + 'share.html';
+
+function shareLink(token) {
+  return SHARE_PAGE + '?t=' + token;
+}
+
+async function toggleShareModal() {
+  const modal = document.getElementById('shareModal');
+  modal.classList.toggle('active');
+  if (modal.classList.contains('active')) loadShares();
+  else document.getElementById('shareMessage').innerHTML = '';
+}
+
+async function loadShares() {
+  const list = document.getElementById('shareList');
+  const { data, error } = await db
+    .from('wishlist_shares')
+    .select('id,label,token,max_price,created_at')
+    .order('created_at', { ascending: false });
+  if (error) {
+    document.getElementById('shareMessage').innerHTML = '<div class="error">' + escapeHtml(error.message) + '</div>';
+    return;
+  }
+  if (!data.length) {
+    list.innerHTML = '<li class="share-empty">No links yet.</li>';
+    return;
+  }
+  list.innerHTML = data.map(s => `
+    <li class="share-row">
+      <div class="who">
+        <strong>${escapeHtml(s.label)}</strong>
+        <span>Up to €${Number(s.max_price).toFixed(0)} · made ${new Date(s.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+      </div>
+      <button class="secondary" onclick="copyShare('${s.token}', '${escapeHtml(s.label).replace(/'/g, '&#39;')}')">Copy link</button>
+      <button class="delete-btn" onclick="deleteShare('${s.id}')" title="Delete link">×</button>
+    </li>`).join('');
+}
+
+async function createShare() {
+  const labelEl = document.getElementById('shareLabel');
+  const maxEl = document.getElementById('shareMax');
+  const label = labelEl.value.trim();
+  const max = parseFloat(maxEl.value);
+  const msg = document.getElementById('shareMessage');
+  msg.innerHTML = '';
+  if (!label) { msg.innerHTML = '<div class="error">Add a name so you know whose link it is.</div>'; return; }
+  if (!Number.isFinite(max) || max <= 0) { msg.innerHTML = '<div class="error">Max price must be above zero.</div>'; return; }
+
+  const { data, error } = await db
+    .from('wishlist_shares')
+    .insert([{ label, max_price: max }])
+    .select('token')
+    .single();
+  if (error) { msg.innerHTML = '<div class="error">' + escapeHtml(error.message) + '</div>'; return; }
+
+  labelEl.value = '';
+  maxEl.value = '100';
+  await loadShares();
+  copyShare(data.token, label);
+}
+
+async function copyShare(token, label) {
+  const link = shareLink(token);
+  const msg = document.getElementById('shareMessage');
+  // Phones: offer the share sheet; elsewhere copy to clipboard
+  if (navigator.share) {
+    try { await navigator.share({ title: 'My wishlist', url: link }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    msg.innerHTML = '<div class="success">Link for ' + escapeHtml(label) + ' copied.</div>';
+  } catch {
+    prompt('Copy this link:', link);
+  }
+}
+
+async function deleteShare(id) {
+  if (!confirm('Delete this link? Anyone using it will lose access.')) return;
+  const { error } = await db.from('wishlist_shares').delete().eq('id', id);
+  if (error) { document.getElementById('shareMessage').innerHTML = '<div class="error">' + escapeHtml(error.message) + '</div>'; return; }
+  loadShares();
+}
 
 // ---------------------------------------------------------------
 // Shortcut support: ?url=... pre-fills and runs the import
@@ -402,4 +552,5 @@ function escapeHtml(text) {
 document.addEventListener('click', (e) => {
   if (e.target === document.getElementById('addModal')) toggleAddModal();
   if (e.target === document.getElementById('importModal')) toggleImportModal();
+  if (e.target === document.getElementById('shareModal')) toggleShareModal();
 });
